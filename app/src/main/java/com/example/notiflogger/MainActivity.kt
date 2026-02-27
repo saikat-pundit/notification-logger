@@ -9,8 +9,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 
@@ -29,22 +34,34 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         dbHelper = DatabaseHelper(this)
+        
+        // UI Elements
+        val loginLayout = findViewById<LinearLayout>(R.id.loginLayout)
+        val mainContentLayout = findViewById<LinearLayout>(R.id.mainContentLayout)
+        val passwordInput = findViewById<EditText>(R.id.passwordInput)
+        val btnUnlock = findViewById<Button>(R.id.btnUnlock)
+        
         logTextView = findViewById(R.id.logTextView)
         val btnRefresh = findViewById<Button>(R.id.btnRefresh)
         val btnClear = findViewById<Button>(R.id.btnClear)
 
-        // 1. Ask for Notification Permission
-        if (!NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
-            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-        }
-
-        // 2. NEW: Ask to Ignore Battery Optimizations
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
+        // --- PASSWORD LOGIC ---
+        btnUnlock.setOnClickListener {
+            if (passwordInput.text.toString() == "sosojojo") {
+                // 1. Hide the keyboard
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(passwordInput.windowToken, 0)
+                
+                // 2. Switch the screens
+                loginLayout.visibility = View.GONE
+                mainContentLayout.visibility = View.VISIBLE
+                
+                // 3. Ask for permissions only AFTER they log in successfully
+                checkPermissions()
+            } else {
+                Toast.makeText(this, "Incorrect Password", Toast.LENGTH_SHORT).show()
+                passwordInput.text.clear()
             }
-            startActivity(intent)
         }
 
         refreshLogs()
@@ -53,11 +70,13 @@ class MainActivity : AppCompatActivity() {
             refreshLogs()
         }
 
+        // This ONLY deletes the local SQLite database. It does NOT touch GitHub.
         btnClear.setOnClickListener {
             val db = dbHelper.writableDatabase
             db.execSQL("DELETE FROM logs")
             db.close()
             refreshLogs()
+            Toast.makeText(this, "Local logs cleared!", Toast.LENGTH_SHORT).show()
         }
 
         val filter = IntentFilter("com.example.notiflogger.NEW_NOTIFICATION")
@@ -65,6 +84,19 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(logUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(logUpdateReceiver, filter)
+        }
+    }
+
+    private fun checkPermissions() {
+        if (!NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
+            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+        }
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
         }
     }
 
