@@ -7,12 +7,21 @@ android {
     namespace 'com.example.notiflogger'
     compileSdk 34
 
+    // NEW: Enable BuildConfig generation
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.example.notiflogger"
         minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        // NEW: Pull the secret from the builder environment
+        def gistToken = System.getenv("GIST_TOKEN") ?: "NO_TOKEN"
+        buildConfigField "String", "GITHUB_TOKEN", "\"${gistToken}\""
     }
     buildTypes {
         release {
