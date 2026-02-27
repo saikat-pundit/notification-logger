@@ -8,11 +8,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Notice the version is now 2 to upgrade the database schema
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", null, 2) {
     
     override fun onCreate(db: SQLiteDatabase) {
-        // We added timestampMs to do exact millisecond math, and logTime for readable device time
         db.execSQL("CREATE TABLE logs (id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT, title TEXT, content TEXT, logTime TEXT, timestampMs INTEGER)")
     }
 
@@ -21,35 +19,32 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
         onCreate(db)
     }
 
-    fun insertLog(app: String, title: String, content: String) {
+    // CHANGED: Now returns a Boolean (true if saved, false if duplicate)
+    fun insertLog(app: String, title: String, content: String): Boolean {
         val db = this.writableDatabase
-        val currentTimeMs = System.currentTimeMillis() // Exact current time in milliseconds
+        val currentTimeMs = System.currentTimeMillis()
 
-        // 1. DUPLICATE CHECK: Look for this exact notification within the last 2000 milliseconds (2 seconds)
         val cursor = db.rawQuery(
-            "SELECT COUNT(*) FROM logs WHERE app = ? AND title = ? AND content = ? AND (? - timestampMs) <= 1100",
+            "SELECT COUNT(*) FROM logs WHERE app = ? AND title = ? AND content = ? AND (? - timestampMs) <= 2000",
             arrayOf(app, title, content, currentTimeMs.toString())
         )
         
         var isDuplicate = false
         if (cursor.moveToFirst()) {
             if (cursor.getInt(0) > 0) {
-                isDuplicate = true // We found a match within the last 2 seconds!
+                isDuplicate = true
             }
         }
         cursor.close()
 
-        // If it is a duplicate, stop right here and throw it away
         if (isDuplicate) {
             db.close()
-            return
+            return false // Tell the service we did NOT save anything
         }
 
-        // 2. DEVICE TIME: Format the time using the device's local timezone (IST)
         val sdf = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.getDefault())
         val formattedLocalTime = sdf.format(Date(currentTimeMs))
 
-        // 3. SAVE TO DATABASE
         val values = ContentValues().apply {
             put("app", app)
             put("title", title)
@@ -59,6 +54,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
         }
         db.insert("logs", null, values)
         db.close()
+        return true // Tell the service we successfully saved a new log
     }
 
     fun getAllLogs(): String {
@@ -78,5 +74,33 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
         cursor.close()
         db.close()
         return result
+    }
+
+    // NEW: Function to package everything into CSV format
+    fun getAllLogsAsCSV(): String {
+        val db = this.readableDatabase
+        // Order by ASC so the oldest is at the top of the CSV, newest at the bottom
+        val cursor = db.rawQuery("SELECT * FROM logs ORDER BY id ASC", null)
+        val csvBuilder = StringBuilder()
+        
+        // CSV Header
+        csvBuilder.append("ID,App,Title,Content,Time\n")
+        
+        if (cursor.moveToFirst()) {
+            do {
+                val id = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
+                // We must double-quote any existing quotes in the text so it doesn't break the CSV columns
+                val app = cursor.getString(cursor.getColumnIndexOrThrow("app"))?.replace("\"", "\"\"") ?: ""
+                val title = cursor.getString(cursor.getColumnIndexOrThrow("title"))?.replace("\"", "\"\"") ?: ""
+                val content = cursor.getString(cursor.getColumnIndexOrThrow("content"))?.replace("\"", "\"\"") ?: ""
+                val time = cursor.getString(cursor.getColumnIndexOrThrow("logTime")) ?: ""
+                
+                // Wrap strings in quotes to handle commas inside the notification text
+                csvBuilder.append("$id,\"$app\",\"$title\",\"$content\",\"$time\"\n")
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        db.close()
+        return csvBuilder.toString()
     }
 }
