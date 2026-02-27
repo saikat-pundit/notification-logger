@@ -18,7 +18,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
-
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 class MainActivity : AppCompatActivity() {
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var logTextView: TextView
@@ -40,7 +41,34 @@ class MainActivity : AppCompatActivity() {
         val mainContentLayout = findViewById<LinearLayout>(R.id.mainContentLayout)
         val passwordInput = findViewById<EditText>(R.id.passwordInput)
         val btnUnlock = findViewById<Button>(R.id.btnUnlock)
+        val btnAdmin = findViewById<Button>(R.id.btnAdmin)
         
+        // Setup Device Admin components
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val adminComponent = ComponentName(this, AdminReceiver::class.java)
+
+        // Check current status and update button text
+        if (dpm.isAdminActive(adminComponent)) {
+            btnAdmin.text = "🔓 Disable Uninstall Protection"
+            btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+        }
+
+        btnAdmin.setOnClickListener {
+            if (!dpm.isAdminActive(adminComponent)) {
+                // Request Admin Rights
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "This prevents the app from being uninstalled without the password.")
+                }
+                startActivity(intent)
+            } else {
+                // Remove Admin Rights (Allows Uninstallation)
+                dpm.removeActiveAdmin(adminComponent)
+                btnAdmin.text = "🛡️ Enable Uninstall Protection"
+                btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_blue_dark)
+                Toast.makeText(this, "Protection disabled. You can now uninstall.", Toast.LENGTH_SHORT).show()
+            }
+        }
         logTextView = findViewById(R.id.logTextView)
         val btnRefresh = findViewById<Button>(R.id.btnRefresh)
         val btnClear = findViewById<Button>(R.id.btnClear)
