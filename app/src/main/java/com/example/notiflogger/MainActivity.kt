@@ -1,6 +1,8 @@
 package com.example.notiflogger
 
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -18,11 +20,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
+
 class MainActivity : AppCompatActivity() {
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var logTextView: TextView
+    
+    // Declare these up here so we can use them in onResume()
+    private lateinit var btnAdmin: Button
+    private lateinit var dpm: DevicePolicyManager
+    private lateinit var adminComponent: ComponentName
 
     private val logUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -41,18 +47,17 @@ class MainActivity : AppCompatActivity() {
         val mainContentLayout = findViewById<LinearLayout>(R.id.mainContentLayout)
         val passwordInput = findViewById<EditText>(R.id.passwordInput)
         val btnUnlock = findViewById<Button>(R.id.btnUnlock)
-        val btnAdmin = findViewById<Button>(R.id.btnAdmin)
+        
+        logTextView = findViewById(R.id.logTextView)
+        val btnRefresh = findViewById<Button>(R.id.btnRefresh)
+        val btnClear = findViewById<Button>(R.id.btnClear)
         
         // Setup Device Admin components
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val adminComponent = ComponentName(this, AdminReceiver::class.java)
+        btnAdmin = findViewById(R.id.btnAdmin)
+        dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        adminComponent = ComponentName(this, AdminReceiver::class.java)
 
-        // Check current status and update button text
-        if (dpm.isAdminActive(adminComponent)) {
-            btnAdmin.text = "🔓 Disable Uninstall Protection"
-            btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
-        }
-
+        // Button Click Logic
         btnAdmin.setOnClickListener {
             if (!dpm.isAdminActive(adminComponent)) {
                 // Request Admin Rights
@@ -64,14 +69,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 // Remove Admin Rights (Allows Uninstallation)
                 dpm.removeActiveAdmin(adminComponent)
-                btnAdmin.text = "🛡️ Enable Uninstall Protection"
-                btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_blue_dark)
+                updateAdminButtonUI() // Instantly update the button
                 Toast.makeText(this, "Protection disabled. You can now uninstall.", Toast.LENGTH_SHORT).show()
             }
         }
-        logTextView = findViewById(R.id.logTextView)
-        val btnRefresh = findViewById<Button>(R.id.btnRefresh)
-        val btnClear = findViewById<Button>(R.id.btnClear)
 
         // --- PASSWORD LOGIC ---
         btnUnlock.setOnClickListener {
@@ -112,6 +113,25 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(logUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(logUpdateReceiver, filter)
+        }
+    }
+
+    // NEW: This runs every time you return to the app screen
+    override fun onResume() {
+        super.onResume()
+        if (::btnAdmin.isInitialized) {
+            updateAdminButtonUI()
+        }
+    }
+
+    // NEW: A helper function to change the button color/text cleanly
+    private fun updateAdminButtonUI() {
+        if (dpm.isAdminActive(adminComponent)) {
+            btnAdmin.text = "🔓 Disable Uninstall Protection"
+            btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+        } else {
+            btnAdmin.text = "🛡️ Enable Uninstall Protection"
+            btnAdmin.backgroundTintList = getColorStateList(android.R.color.holo_blue_dark)
         }
     }
 
