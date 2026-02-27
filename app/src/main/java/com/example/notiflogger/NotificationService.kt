@@ -16,11 +16,23 @@ class NotificationService : NotificationListenerService() {
         val packageName = sbn?.packageName ?: return
         val extras = sbn.notification?.extras ?: return
 
-        val title = extras.getString(Notification.EXTRA_TITLE) ?: "No Title"
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: "No Text"
+        // Grab the best available title
+        val title = extras.getString(Notification.EXTRA_TITLE) 
+            ?: extras.getString(Notification.EXTRA_TITLE_BIG) 
+            ?: "No Title"
 
-        // Ignore our own app or empty notifications
-        if (packageName != "com.example.notiflogger" && text != "No Text") {
+        // Dig deeper to find text from apps like WhatsApp, Telegram, or Shopping Apps
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
+            ?: "No Text"
+
+        // Ignore our own app, the Android system UI, or empty notifications
+        if (packageName != "com.example.notiflogger" && 
+            packageName != "com.android.systemui" && 
+            text != "No Text") {
+            
             dbHelper.insertLog(packageName, title, text)
         }
     }
