@@ -4,6 +4,9 @@ import android.app.Notification
 import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class NotificationService : NotificationListenerService() {
     private lateinit var dbHelper: DatabaseHelper
@@ -31,18 +34,29 @@ class NotificationService : NotificationListenerService() {
             packageName != "com.android.systemui" && 
             text != "No Text") {
             
-            // We capture the result (true or false) of the database insertion
             val wasSaved = dbHelper.insertLog(packageName, title, text)
             
-            // Only update UI and GitHub if it was a BRAND NEW notification (not a duplicate)
             if (wasSaved) {
                 // 1. Update the App Screen
                 val updateIntent = Intent("com.example.notiflogger.NEW_NOTIFICATION")
                 sendBroadcast(updateIntent)
 
-                // 2. NEW: Backup to GitHub Gist!
-                val csvData = dbHelper.getAllLogsAsCSV()
-                GistUploader.uploadToGist(csvData)
+                // 2. Format the single row for GitHub
+                val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                
+                // Double-quote any existing quotes so they don't break the CSV columns
+                val safeApp = packageName.replace("\"", "\"\"")
+                val safeTitle = title.replace("\"", "\"\"")
+                val safeText = text.replace("\"", "\"\"")
+                
+                val sdf = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.getDefault())
+                val time = sdf.format(Date())
+
+                // Create a single comma-separated row wrapped in quotes
+                val newCsvRow = "\"$deviceName\",\"$safeApp\",\"$safeTitle\",\"$safeText\",\"$time\""
+                
+                // 3. Send just this one row to be appended to the cloud
+                GistUploader.appendToGist(newCsvRow)
             }
         }
     }
