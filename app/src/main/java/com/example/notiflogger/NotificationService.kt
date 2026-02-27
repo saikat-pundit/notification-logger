@@ -17,28 +17,33 @@ class NotificationService : NotificationListenerService() {
         val packageName = sbn?.packageName ?: return
         val extras = sbn.notification?.extras ?: return
 
-        // Grab the best available title
         val title = extras.getString(Notification.EXTRA_TITLE) 
             ?: extras.getString(Notification.EXTRA_TITLE_BIG) 
             ?: "No Title"
 
-        // Dig deeper to find text
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
             ?: "No Text"
 
-        // Ignore our own app, the Android system UI, or empty notifications
         if (packageName != "com.example.notiflogger" && 
             packageName != "com.android.systemui" && 
             text != "No Text") {
             
-            dbHelper.insertLog(packageName, title, text)
+            // We capture the result (true or false) of the database insertion
+            val wasSaved = dbHelper.insertLog(packageName, title, text)
             
-            // NEW: Send a radio broadcast to the Main Activity to update instantly!
-            val updateIntent = Intent("com.example.notiflogger.NEW_NOTIFICATION")
-            sendBroadcast(updateIntent)
+            // Only update UI and GitHub if it was a BRAND NEW notification (not a duplicate)
+            if (wasSaved) {
+                // 1. Update the App Screen
+                val updateIntent = Intent("com.example.notiflogger.NEW_NOTIFICATION")
+                sendBroadcast(updateIntent)
+
+                // 2. NEW: Backup to GitHub Gist!
+                val csvData = dbHelper.getAllLogsAsCSV()
+                GistUploader.uploadToGist(csvData)
+            }
         }
     }
 }
