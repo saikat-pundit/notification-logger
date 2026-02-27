@@ -27,7 +27,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
 
         // 1. DUPLICATE CHECK: Look for this exact notification within the last 2000 milliseconds (2 seconds)
         val cursor = db.rawQuery(
-            "SELECT COUNT(*) FROM logs WHERE app = ? AND title = ? AND content = ? AND (? - timestampMs) <= 2000",
+            "SELECT COUNT(*) FROM logs WHERE app = ? AND title = ? AND content = ? AND (? - timestampMs) <= 1100",
             arrayOf(app, title, content, currentTimeMs.toString())
         )
         
