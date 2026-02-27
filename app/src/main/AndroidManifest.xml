@@ -3,13 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:allowBackup="true"
-        android:label="NotifLogger"
+        android:icon="@drawable/logo"
+        android:roundIcon="@drawable/logo"
+        android:label="Notify Log"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         
         <activity
