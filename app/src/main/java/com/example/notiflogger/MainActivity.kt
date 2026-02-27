@@ -4,8 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -15,10 +18,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var logTextView: TextView
 
-    // NEW: The receiver that listens for the broadcast from the Service
     private val logUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            refreshLogs() // Update the screen instantly when a broadcast is received!
+            refreshLogs()
         }
     }
 
@@ -31,12 +33,20 @@ class MainActivity : AppCompatActivity() {
         val btnRefresh = findViewById<Button>(R.id.btnRefresh)
         val btnClear = findViewById<Button>(R.id.btnClear)
 
-        // Ask for permission if not granted
+        // 1. Ask for Notification Permission
         if (!NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
 
-        // Load logs initially
+        // 2. NEW: Ask to Ignore Battery Optimizations
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        }
+
         refreshLogs()
 
         btnRefresh.setOnClickListener {
@@ -50,7 +60,6 @@ class MainActivity : AppCompatActivity() {
             refreshLogs()
         }
 
-        // NEW: Register the receiver to start listening for the "NEW_NOTIFICATION" signal
         val filter = IntentFilter("com.example.notiflogger.NEW_NOTIFICATION")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(logUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -59,7 +68,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // NEW: Stop listening when the app is closed to save memory
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(logUpdateReceiver)
