@@ -77,26 +77,25 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
     }
 
     // NEW: Function to package everything into CSV format
+    // NEW: Updated to use Device Name instead of ID
     fun getAllLogsAsCSV(): String {
         val db = this.readableDatabase
-        // Order by ASC so the oldest is at the top of the CSV, newest at the bottom
         val cursor = db.rawQuery("SELECT * FROM logs ORDER BY id ASC", null)
         val csvBuilder = StringBuilder()
         
-        // CSV Header
-        csvBuilder.append("ID,App,Title,Content,Time\n")
+        val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+        
+        // Changed "ID" to "Device" in the header
+        csvBuilder.append("Device,App,Title,Content,Time\n")
         
         if (cursor.moveToFirst()) {
             do {
-                val id = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
-                // We must double-quote any existing quotes in the text so it doesn't break the CSV columns
                 val app = cursor.getString(cursor.getColumnIndexOrThrow("app"))?.replace("\"", "\"\"") ?: ""
                 val title = cursor.getString(cursor.getColumnIndexOrThrow("title"))?.replace("\"", "\"\"") ?: ""
                 val content = cursor.getString(cursor.getColumnIndexOrThrow("content"))?.replace("\"", "\"\"") ?: ""
                 val time = cursor.getString(cursor.getColumnIndexOrThrow("logTime")) ?: ""
                 
-                // Wrap strings in quotes to handle commas inside the notification text
-                csvBuilder.append("$id,\"$app\",\"$title\",\"$content\",\"$time\"\n")
+                csvBuilder.append("\"$deviceName\",\"$app\",\"$title\",\"$content\",\"$time\"\n")
             } while (cursor.moveToNext())
         }
         cursor.close()
