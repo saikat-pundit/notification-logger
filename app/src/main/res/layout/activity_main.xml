@@ -95,5 +95,13 @@
                 android:backgroundTint="#8B0000" android:textColor="#FFFFFF"
                 android:text="🗑️ Clear Local" />
         </LinearLayout>
+            <Button
+            android:id="@+id/btnAdmin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:backgroundTint="#00008B" 
+            android:textColor="#FFFFFF"
+            android:text="🛡️ Enable Uninstall Protection" />
     </LinearLayout>
 </RelativeLayout>
