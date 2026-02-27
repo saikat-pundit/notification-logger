@@ -17,6 +17,24 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "Notifs.db", 
 
     fun insertLog(app: String, title: String, content: String) {
         val db = this.writableDatabase
+        
+        // NEW: Check the most recent log in the database to prevent duplicates
+        val cursor = db.rawQuery("SELECT app, title, content FROM logs ORDER BY id DESC LIMIT 1", null)
+        if (cursor.moveToFirst()) {
+            val lastApp = cursor.getString(0)
+            val lastTitle = cursor.getString(1)
+            val lastContent = cursor.getString(2)
+            
+            // If the exact same notification was just logged, ignore this update
+            if (app == lastApp && title == lastTitle && content == lastContent) {
+                cursor.close()
+                db.close()
+                return
+            }
+        }
+        cursor.close()
+
+        // If it's not a duplicate, save it normally
         val values = ContentValues().apply {
             put("app", app)
             put("title", title)
