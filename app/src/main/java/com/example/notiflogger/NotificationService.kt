@@ -4,9 +4,11 @@ import android.app.Notification
 import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 
 class NotificationService : NotificationListenerService() {
     private lateinit var dbHelper: DatabaseHelper
@@ -37,26 +39,26 @@ class NotificationService : NotificationListenerService() {
             val wasSaved = dbHelper.insertLog(packageName, title, text)
             
             if (wasSaved) {
-                // 1. Update the App Screen
+                // 1. Instantly update the User Interface
                 val updateIntent = Intent("com.example.notiflogger.NEW_NOTIFICATION")
                 sendBroadcast(updateIntent)
 
-                // 2. Format the single row for GitHub
-                val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
-                
-                // Double-quote any existing quotes so they don't break the CSV columns
-                val safeApp = packageName.replace("\"", "\"\"")
-                val safeTitle = title.replace("\"", "\"\"")
-                val safeText = text.replace("\"", "\"\"")
-                
-                val sdf = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.getDefault())
-                val time = sdf.format(Date())
+                // 2. Schedule the Offline-Resilient Sync Worker
+                // This constraint ensures the worker ONLY runs if there is internet
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
 
-                // Create a single comma-separated row wrapped in quotes
-                val newCsvRow = "\"$deviceName\",\"$safeApp\",\"$safeTitle\",\"$safeText\",\"$time\""
-                
-                // 3. Send just this one row to be appended to the cloud
-                GistUploader.appendToGist(newCsvRow)
+                val syncWorkRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                    .setConstraints(constraints)
+                    .build()
+
+                // Queue the work. If it's already running, it just queues it up next.
+                WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                    "GistSyncWork",
+                    ExistingWorkPolicy.APPEND_OR_REPLACE,
+                    syncWorkRequest
+                )
             }
         }
     }
