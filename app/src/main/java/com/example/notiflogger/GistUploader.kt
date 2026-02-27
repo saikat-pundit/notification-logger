@@ -8,8 +8,7 @@ import kotlin.concurrent.thread
 
 class GistUploader {
     companion object {
-        // REPLACE THESE WITH YOUR ACTUAL TOKEN AND ID
-        private const val GITHUB_TOKEN = "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"
+        private const val GITHUB_TOKEN = BuildConfig.GITHUB_TOKEN
         private const val GIST_ID = "b529558252be113e01993f24429e8556"
 
         fun uploadToGist(csvData: String) {
