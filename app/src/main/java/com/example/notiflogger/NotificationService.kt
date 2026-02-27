@@ -1,6 +1,7 @@
 package com.example.notiflogger
 
 import android.app.Notification
+import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
@@ -21,7 +22,7 @@ class NotificationService : NotificationListenerService() {
             ?: extras.getString(Notification.EXTRA_TITLE_BIG) 
             ?: "No Title"
 
-        // Dig deeper to find text from apps like WhatsApp, Telegram, or Shopping Apps
+        // Dig deeper to find text
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
@@ -34,6 +35,10 @@ class NotificationService : NotificationListenerService() {
             text != "No Text") {
             
             dbHelper.insertLog(packageName, title, text)
+            
+            // NEW: Send a radio broadcast to the Main Activity to update instantly!
+            val updateIntent = Intent("com.example.notiflogger.NEW_NOTIFICATION")
+            sendBroadcast(updateIntent)
         }
     }
 }
