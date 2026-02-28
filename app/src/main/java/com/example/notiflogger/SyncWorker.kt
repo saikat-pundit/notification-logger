@@ -15,7 +15,7 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
     
     companion object {
         private const val GITHUB_TOKEN = BuildConfig.GITHUB_TOKEN
-        // REPLACE WITH YOUR ACTUAL GIST ID
+        // IMPORTANT: Put your Gist ID back in here!
         private const val GIST_ID = "b529558252be113e01993f24429e8556" 
     }
 
@@ -23,7 +23,6 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
         val dbHelper = DatabaseHelper(applicationContext)
         val unsyncedLogs = dbHelper.getUnsyncedLogs()
 
-        // If nothing needs to be synced, stop and declare success
         if (unsyncedLogs.isEmpty()) {
             return Result.success()
         }
@@ -44,7 +43,16 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
                 val jsonResponse = JSONObject(responseStr)
                 val files = jsonResponse.getJSONObject("files")
                 if (files.has("notifications.csv")) {
-                    currentContent = files.getJSONObject("notifications.csv").getString("content")
+                    val rawGistData = files.getJSONObject("notifications.csv").getString("content")
+                    
+                    // --- DECRYPTION LOGIC ---
+                    // If the Gist has your old unencrypted data, it starts with "Device". 
+                    // Otherwise, we decrypt the scrambled text!
+                    if (rawGistData.startsWith("Device,App")) {
+                        currentContent = rawGistData
+                    } else {
+                        currentContent = EncryptionHelper.decrypt(rawGistData)
+                    }
                 }
             }
             getConn.disconnect()
@@ -55,14 +63,18 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
                 currentContent += "\n"
             }
 
-            // 2. APPEND ALL UNSYNCED LOGS
+            // 2. APPEND ALL UNSYNCED LOGS (Locally stored raw data)
             val syncedIds = mutableListOf<Int>()
             for (log in unsyncedLogs) {
-                currentContent += log.second // Append the CSV row
-                syncedIds.add(log.first)     // Track the ID to mark as synced later
+                currentContent += log.second 
+                syncedIds.add(log.first)     
             }
 
-            // 3. UPLOAD TO GITHUB
+            // 3. --- ENCRYPT THE FINAL FILE ---
+            // Scramble the entire updated CSV file into an unreadable Base64 string
+            val encryptedPayload = EncryptionHelper.encrypt(currentContent)
+
+            // 4. UPLOAD TO GITHUB
             val patchUrl = URL("https://api.github.com/gists/$GIST_ID")
             val patchConn = patchUrl.openConnection() as HttpURLConnection
             patchConn.requestMethod = "PATCH"
@@ -71,8 +83,17 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
             patchConn.setRequestProperty("Content-Type", "application/json")
             patchConn.doOutput = true
 
-            val escapedCsv = currentContent.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "").replace("\t", "\\t")
-            val jsonPayload = "{ \"files\": { \"notifications.csv\": { \"content\": \"$escapedCsv\" } } }"
+            // Send the encrypted payload instead of the raw content
+            val fileObj = JSONObject()
+            fileObj.put("content", encryptedPayload) 
+            
+            val filesObj = JSONObject()
+            filesObj.put("notifications.csv", fileObj)
+            
+            val payloadObj = JSONObject()
+            payloadObj.put("files", filesObj)
+            
+            val jsonPayload = payloadObj.toString()
 
             val writer = OutputStreamWriter(patchConn.outputStream)
             writer.write(jsonPayload)
@@ -82,18 +103,16 @@ class SyncWorker(context: Context, workerParams: WorkerParameters) : Worker(cont
             val responseCode = patchConn.responseCode
             patchConn.disconnect()
 
-            // 4. IF SUCCESSFUL, MARK LOCAL DATABASE AS SYNCED
             if (responseCode == 200) {
                 dbHelper.markAsSynced(syncedIds)
                 return Result.success()
             } else {
-                return Result.retry() // If GitHub rejects it, tell Android to try again later
+                Log.e("SyncWorker", "GitHub API Error Code: $responseCode")
+                return Result.retry() 
             }
 
         } catch (e: Exception) {
             e.printStackTrace()
-            // If there is NO INTERNET, this exception triggers. 
-            // Result.retry() tells Android to automatically run this again when internet returns!
             return Result.retry() 
         }
     }
